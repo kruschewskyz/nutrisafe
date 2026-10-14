@@ -29,7 +29,12 @@ const cookieOptions = {
 } as const;
 
 function sendSession(res: Response, session: auth.Session, status = 200) {
-  res.cookie(REFRESH_COOKIE, session.refreshToken, { ...cookieOptions, expires: session.refreshExpiresAt });
+  res.cookie(REFRESH_COOKIE, session.refreshToken, {
+  httpOnly: true,
+  secure: env.NODE_ENV === 'production',
+  sameSite: env.COOKIE_SAMESITE as 'lax' | 'none' | 'strict',
+  path: '/api/auth',
+});
   res.status(status).json({ accessToken: session.accessToken, user: session.user });
 }
 
