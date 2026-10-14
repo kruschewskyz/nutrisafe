@@ -21,31 +21,22 @@ const REFRESH_COOKIE = 'ns_rt';
  *  - path=/api/auth: só é enviado às rotas de autenticação, não a toda a API
  * O access token (curto) fica só em MEMÓRIA no frontend, nunca em localStorage.
  */
+const sameSite =
+  env.COOKIE_SAMESITE === 'strict' || env.COOKIE_SAMESITE === 'lax' || env.COOKIE_SAMESITE === 'none'
+    ? env.COOKIE_SAMESITE
+    : 'lax';
+
 const cookieOptions = {
   httpOnly: true,
   secure: isProd,
-  sameSite: env.COOKIE_SAMESITE,
+  sameSite,
   path: '/api/auth',
 } as const;
 
 function sendSession(res: Response, session: auth.Session, status = 200) {
-  res.cookie(REFRESH_COOKIE, session.refreshToken, {
-  httpOnly: true,
-  secure: env.NODE_ENV === 'production',
-  sameSite: env.COOKIE_SAMESITE as 'lax' | 'none' | 'strict',
-  path: '/api/auth',
-});
+  res.cookie(REFRESH_COOKIE, session.refreshToken, cookieOptions);
   res.status(status).json({ accessToken: session.accessToken, user: session.user });
 }
-
-import { CookieOptions, Response } from 'express';
-
-const cookieOptions: CookieOptions = {
-  httpOnly: true,
-  secure: env.NODE_ENV === 'production',
-  sameSite: env.COOKIE_SAMESITE as 'lax' | 'none' | 'strict',
-  path: '/api/auth',
-};
 
 const clearCookie = (res: Response) => res.clearCookie(REFRESH_COOKIE, cookieOptions);
 
