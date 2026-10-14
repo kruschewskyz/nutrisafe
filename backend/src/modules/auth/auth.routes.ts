@@ -38,7 +38,14 @@ function sendSession(res: Response, session: auth.Session, status = 200) {
   res.status(status).json({ accessToken: session.accessToken, user: session.user });
 }
 
-const clearCookie = (res: Response) => res.clearCookie(REFRESH_COOKIE, cookieOptions);
+import { CookieOptions } from 'express';
+
+const cookieOptions: CookieOptions = {
+  httpOnly: true,
+  secure: env.NODE_ENV === 'production',
+  sameSite: env.COOKIE_SAMESITE as 'lax' | 'none' | 'strict',
+  path: '/api/auth',
+};
 
 authRouter.post('/register', sensitiveLimiter, async (req, res) => {
   const input = parse(registerSchema, req.body);
