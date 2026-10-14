@@ -1,0 +1,198 @@
+// NutriSafe - schema do banco (PostgreSQL via Prisma)
+//
+// Princípios:
+//  - Toda tabela com dados do usuário tem userId + onDelete: Cascade, então o
+//    "direito ao esquecimento" (LGPD art. 18) é uma única operação: apagar o User.
+//  - Senhas: só hash argon2id. Tokens: só HMAC (nunca o valor em claro).
+//  - Alimentos com userId = null formam a base pública (somente ADMIN altera).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = "postgresql://nutrisafe:nutrisafe@localhost:5432/nutrisafe?schema=public"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Sex {
+  MALE
+  FEMALE
+}
+
+enum ActivityLevel {
+  SEDENTARY // x1.2
+  LIGHT // x1.375
+  MODERATE // x1.55
+  ACTIVE // x1.725
+  VERY_ACTIVE // x1.9
+}
+
+enum Goal {
+  LOSE
+  MAINTAIN
+  GAIN
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+model User {
+  id            String               @id @default(uuid())
+  email         String               @unique
+  passwordHash  String // argon2id, nunca texto puro
+  name          String
+  role          Role                 @default(USER)
+  consentAt     DateTime? // aceite dos termos/política (LGPD art. 7, I)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  profile       Profile?
+  target        DailyTarget?
+  meals         Meal[]
+  favorites     FavoriteMeal[]
+  refreshTokens RefreshToken[]
+  resetTokens   PasswordResetToken[]
+  weightLogs    WeightLog[]
+  customFoods   Food[]
+}
+
+model Profile {
+  id            String        @id @default(uuid())
+  userId        String        @unique
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  birthDate     DateTime      @db.Date
+  sex           Sex
+  heightCm      Float
+  weightKg      Float
+  activityLevel ActivityLevel
+  goal          Goal
+  updatedAt     DateTime      @updatedAt
+}
+
+// Metas diárias (calculadas automaticamente ou ajustadas manualmente)
+model DailyTarget {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  calories  Float
+  proteinG  Float
+  carbsG    Float
+  fatG      Float
+  updatedAt DateTime @updatedAt
+}
+
+model Food {
+  id        String     @id @default(uuid())
+  // null = base pública; preenchido = alimento criado pelo usuário (privado)
+  userId    String?
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  brand     String?
+  // Valores por 100 g
+  calories  Float
+  proteinG  Float
+  carbsG    Float
+  fatG      Float
+  fiberG    Float      @default(0)
+  sodiumMg  Float      @default(0)
+  ironMg    Float      @default(0)
+  calciumMg Float      @default(0)
+  vitCMg    Float      @default(0)
+  source    String     @default("custom") // ex.: TACO, USDA, custom
+  items     MealItem[]
+  createdAt DateTime   @default(now())
+
+  @@index([name])
+  @@index([userId])
+  favoriteMealItems FavoriteMealItem[]
+}
+
+model Meal {
+  id        String     @id @default(uuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      MealType
+  eatenAt   DateTime
+  notes     String?
+  items     MealItem[]
+  createdAt DateTime   @default(now())
+
+  @@index([userId, eatenAt])
+}
+
+model MealItem {
+  id     String @id @default(uuid())
+  mealId String
+  meal   Meal   @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  foodId String
+  food   Food   @relation(fields: [foodId], references: [id], onDelete: Restrict)
+  grams  Float
+}
+
+model FavoriteMeal {
+  id        String             @id @default(uuid())
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  type      MealType
+  items     FavoriteMealItem[]
+  createdAt DateTime           @default(now())
+
+  @@index([userId])
+}
+
+model FavoriteMealItem {
+  id         String       @id @default(uuid())
+  favoriteId String
+  favorite   FavoriteMeal @relation(fields: [favoriteId], references: [id], onDelete: Cascade)
+  foodId     String
+  food       Food         @relation(fields: [foodId], references: [id], onDelete: Restrict)
+  grams      Float
+}
+
+model WeightLog {
+  id       String   @id @default(uuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weightKg Float
+  loggedAt DateTime @default(now())
+
+  @@index([userId, loggedAt])
+}
+
+// Refresh tokens: guardamos só o HMAC. "family" identifica uma sessão de login;
+// se um token já usado reaparecer (roubo), revogamos a família inteira.
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  family    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([family])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}

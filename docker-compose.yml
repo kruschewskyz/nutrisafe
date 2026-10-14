@@ -1,0 +1,17 @@
+# Banco PostgreSQL local para desenvolvimento.  Uso: docker compose up -d
+# Credenciais abaixo são APENAS para desenvolvimento local (porta exposta só em 127.0.0.1).
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nutrisafe
+      POSTGRES_PASSWORD: nutrisafe
+      POSTGRES_DB: nutrisafe
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - nutrisafe-db:/var/lib/postgresql/data
+
+volumes:
+  nutrisafe-db:
